@@ -2,11 +2,14 @@
 This project contains the code for Cribbage as a reinforcement learning problem.
 
 ## To get right into it
-The agents are: LinearB.py Myrmidon.py, Monty.py, Monty2.py, NonLinearB.py, PlayerRandom.py QLearner.py
-Each agent can be run directly as a python script >> python3 <agentname>.py
-This will run the agent in the Arena against Myrmidon. Produces performance grpahs used in Report/Presentation
+The agents are: DeepPeg.py, LinearB.py, Myrmidon.py, Monty.py, Monty2.py, NonLinearB.py, and PlayerRandom.py
+
+Each agent can be run directly as a python script
+```>> python3 <agentname>.py```
+This will run the agent in the Arena against Myrmidon and produces learning curve performance graphs.
 
 Supporting files are: TrainHand.py, TrainPegging.py, and TrainingScript.py
+
 These files are configured to be run directly as scripts; TrainHand.py and TrainPegging.py are both interactive scripts.
 
 ## More detailed file rundown
