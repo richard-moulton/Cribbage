@@ -32,10 +32,11 @@ There are four kinds of files in this folder.
 
 ### GENERAL FILES
 12. Arena.py: Records performance data for a player over a number of hands. Can be used to produce training curve data or to measure final performance levels.
-13. TrainPegging.py: Trains players on pegging phase of Cribbage
-14. TrainHand.py: Trains players on a single hand of Cribbage
-15. TrainingScript.py: Automates the processes of training agents against each other and of running round robin tournaments.
-16. Utilities.py: Useful functions that are used throughout the project.
+13. CriticSessions.py: Allows you to use one agent to critique the decisions of another agent during play.
+14. TrainPegging.py: Trains players on pegging phase of Cribbage.
+15. TrainHand.py: Trains players on a single hand of Cribbage.
+16. TrainingScript.py: Automates the processes of training agents against each other, providing critiques by other agents, and of running round robin tournaments. 
+17. Utilities.py: Useful functions that are used throughout the project.
 
 ### MEMORY FILES
 A number of learning agents store parameters in files. These are:

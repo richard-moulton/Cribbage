@@ -25,6 +25,7 @@
 
 # Cribbage imports
 from Arena import Arena
+from CriticSessions import CriticSessions
 
 # PLayer imports
 from PlayerRandom import PlayerRandom
@@ -41,23 +42,27 @@ import numpy as np
 # Variables
 trainFlag = False
 tournamentFlag = True
-learningAgents = [LinearB(1,0.5,0.9,False),NonLinearB(1,0.3,0.7,False),DeepPeg(1,True,False),Monty(1,False),Monty2(1,False)]
-opponentAgents = [LinearB(2,0,0,False),NonLinearB(2,0,0,False),DeepPeg(2,False,False),Monty(2,False),Monty2(2,False),PlayerRandom(2,False),Myrmidon(2,5,False)]
+criticFlag = False
+
+verboseFlag = True
 
 # Training
 if trainFlag:
-    for i in range(20):
+    learningAgents = [DeepPeg(1,True,True,False)]#[LinearB(1,0.5,0.9,False),NonLinearB(1,0.3,0.7,False),DeepPeg(1,True,False),Monty(1,False),Monty2(1,False)]
+    opponentAgents = [Myrmidon(2,5,False),DeepPeg(2,False,False,False)]
+
+    for i in range(50):
         for j in range(len(learningAgents)):
             for k in range(len(opponentAgents)):
-                if j != k:
-                    player1 = learningAgents[j]
-                    player2 = opponentAgents[k]
-                    arena = Arena([player1,player2],False)
-                    arena.playHands(10)
+                player1 = learningAgents[j]
+                player2 = opponentAgents[k]
+                arena = Arena([player1,player2],False,verboseFlag)
+                arena.playHands(10)
             
 
 # Tournament
 if tournamentFlag:
+    opponentAgents = [PlayerRandom(1,False),DeepPeg(1,True,False,False),DeepPeg(1,False,False,False),Myrmidon(2,1,False),Myrmidon(2,5,False),Myrmidon(2,10,False)]
     numAgents = len(opponentAgents)
     peggingResults = np.zeros((numAgents,numAgents))
     handResults = np.zeros((numAgents,numAgents))
@@ -68,8 +73,8 @@ if tournamentFlag:
                 player1 = opponentAgents[i]
                 player1.number = 1
                 player2 = opponentAgents[j]
-                arena = Arena([player1,player2],False)
-                matchupResults = arena.playHands(1)
+                arena = Arena([player1,player2],False,verboseFlag)
+                matchupResults = arena.playHands(50)
                 peggingResults[i][j] = np.average(matchupResults[0])
                 handResults[i][j] = np.average(matchupResults[1])
                 totalResults[i][j] = np.average(matchupResults[2])
@@ -89,5 +94,11 @@ if tournamentFlag:
     handAverages = (numAgents * np.average(handResults,axis=1))/(numAgents-1)
     totalAverages = (numAgents * np.average(totalResults,axis=1))/(numAgents-1)
 
-    
+# Critic
+if criticFlag:
+        player1 = DeepPeg(1,False,False,False)
+        player2 = Myrmidon(2,5,False)
+        critic = Myrmidon(0,5,False)
+        criticSession = CriticSessions([player1,player2],critic,verboseFlag)
+        criticSession.playHands(1)
     

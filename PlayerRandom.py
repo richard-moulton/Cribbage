@@ -48,7 +48,7 @@ class PlayerRandom(Player):
         super().reset()
 
     # Randomly select two cards to throw into the crib
-    def throwCribCards(self, numCards, gameState):
+    def throwCribCards(self, numCards, gameState, criticThrows):
         cribCards = []
 
         for i in range(0, numCards):
@@ -62,7 +62,7 @@ class PlayerRandom(Player):
         return cribCards
 
     # Randomly select a card to play while making sure that it won't put the count over 31
-    def playCard(self, gameState):
+    def playCard(self, gameState,criticCard):
         cardIndices = list(range(0, len(self.playhand)))
         playedCard = None
         count = gameState['count']
@@ -85,6 +85,14 @@ class PlayerRandom(Player):
                 print("\tPlayerRandom ({}) has no cards left; go!".format(self.number))
 
         return playedCard
+
+    # Explain why certain cards were thrown into the crib
+    def explainThrow(self,numCards,gameState):
+        print("Random ({}) chose to throw those cards into the crib randomly. No explanation.".format(self.number))
+        
+    # Explain why a certain card was played during pegging
+    def explainPlay(self,numCards,gameState):
+        print("Random ({}) chose to play that card during pegging at random. No reason.".format(self.number))
 
     # PlayerRandom does not learn
     def learnFromHandScores(self, scores, gameState):

@@ -40,12 +40,27 @@ class Player(ABC):
         self.hand = []
         self.playhand = []
 
+    def removeCard(self, card):
+        for i in range(0,len(self.playhand)):
+            if self.playhand[i].isIdentical(card):
+                self.playhand.pop(i)
+                return
+        print("Tried to remove the {} from {}'s playhand, but it wasn't there!".format(str(card),self.getName()))
+
     @abstractmethod
-    def throwCribCards(self, numCards, crib):
+    def throwCribCards(self, numCards, crib, criticThrow):
         pass
 
     @abstractmethod
-    def playCard(self, gameState):
+    def playCard(self, gameState, criticCard):
+        pass
+
+    @abstractmethod
+    def explainThrow(self, numCards, crib):
+        pass
+    
+    @abstractmethod
+    def explainPlay(self, gameState):
         pass
 
     @abstractmethod

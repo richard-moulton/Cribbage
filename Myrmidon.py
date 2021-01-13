@@ -65,7 +65,7 @@ class Myrmidon(Player):
 
     # Chooses which cards to throw based on randomly sampling potential starter
     # cards for each combination of cards thrown.
-    def throwCribCards(self, numCards, gameState):
+    def throwCribCards(self, numCards, gameState, criticThrow):
         cribCards = []
         cardScores = np.zeros(len(self.hand))
 
@@ -102,6 +102,12 @@ class Myrmidon(Player):
             cribCards.append(self.hand.pop(lowIndex))
             cardScores = np.delete(cardScores, lowIndex)
 
+        if not(criticThrow is None):
+            if not(areCardsEqual(cribCards,criticThrow)):
+                self.explainThrow(numCards,gameState)
+            else:
+                print("The critic agreed with {}'s throw.".format(self.getName()))
+
         if(self.verbose):
             print("Myrmidon ({}) threw {} cards into the crib".format(self.number, numCards))
 
@@ -109,9 +115,12 @@ class Myrmidon(Player):
 
         return cribCards
 
+    def explainThrow(self,numCards,gameState):
+        print("Myrmidon ({}) has not implemented explainThrow".format(self.number))
+
     # Chooses a card to play during pegging by maximizing the immediate return
     # and the value of the afterstate according to some heuristic rules.
-    def playCard(self, gameState):
+    def playCard(self, gameState, criticCard):
         cardScores = np.zeros(len(self.playhand))
         playedCard = None
         countCards = gameState['inplay']
@@ -130,6 +139,8 @@ class Myrmidon(Player):
                         cardScores[i] += 15
 
             if np.amax(cardScores) > 0:
+                if not(criticCard is None) and not(criticCard.isIdentical(self.playhand[max(range(len(cardScores)))])):
+                    self.explainPlay(gameState)
                 playedCard = self.playhand.pop(max(range(len(cardScores)), key=cardScores.__getitem__))
                 if(self.verbose):
                     print("\tMyrmidon ({}) played {}".format(self.number, str(playedCard)))
@@ -142,6 +153,39 @@ class Myrmidon(Player):
 
         return playedCard
 
+    def explainPlay(self,gameState):
+        cardScores = np.zeros(len(self.playhand))
+        playedCard = None
+        countCards = gameState['inplay']
+        count = gameState['count']
+
+        if len(self.playhand) != 0:
+            print("\tMyrmidon ({}) is considering:".format(self.number))
+            for i in range(0, len(self.playhand)):
+                print("\t{}".format(str(self.playhand[i])),end=" ")
+                # Check that the card can be played
+                if count + self.playhand[i].value() < 32:
+                    newCountCards = countCards + [self.playhand[i]]
+                    cardScores[i] += 10 * scoreCards(newCountCards, False) + self.playhand[i].rank.value
+                    print("scores {} for the count,".format(cardScores[i]),end=" ")
+                    if (count + self.playhand[i].value() == 5) or (count + self.playhand[i].value() == 10) or (
+                            count + self.playhand[i].value() == 21):
+                        cardScores[i] = max(1, cardScores[i] - 10)
+                        print("is adjusted to {0} for the count left ({1}),".format(cardScores[i],(count + self.playhand[i].value())),end=" ")
+                    if count + self.playhand[i].value() < 5:
+                        cardScores[i] += 15
+                        print("is rewarded for leaving a count of less than 5.",end=" ")
+                    print("Final score is {}.".format(cardScores[i]))
+                else:
+                    print("can't be played.")
+            if np.amax(cardScores) > 0:
+                playedCard = self.playhand[max(range(len(cardScores)))]
+                print("\tI choose to play {}".format(str(playedCard)))
+            else:
+                print("\tI can't play any of my cards and have to say go!".format(self.number))
+        else:
+            print("\tMyrmidon ({}): I have no cards left and have to say go!".format(self.number))
+
     # Myrmidon does not learn
     def learnFromHandScores(self, scores, gameState):
         pass
@@ -149,6 +193,10 @@ class Myrmidon(Player):
     # Myrmidon does not learn
     def learnFromPegging(self, gameState):
         pass
+
+    def show(self):
+        print('{}:'.format(self.getName()))
+        print('Hand:' + cardsString(sorted(self.playhand)))
 
 if __name__ == '__main__':
     # Initialize variables

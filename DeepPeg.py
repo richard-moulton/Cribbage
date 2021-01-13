@@ -60,7 +60,7 @@ import matplotlib.pyplot as plt
 
 class DeepPeg(Player):
 
-    def __init__(self, number, saveBrains=True, verbose=False):
+    def __init__(self, number, softmaxFlag = False, saveBrains=True, verbose=False):
         super().__init__(number, verbose)
         self.alpha = 0.5
         # Note: epsilon unused since we use softmax decision making
@@ -74,6 +74,7 @@ class DeepPeg(Player):
         self.prevScore = 0
         self.cribThrow = []
         self.throwingState = []
+        self.softmaxFlag = softmaxFlag
         self.saveFlag = saveBrains
 
         self.filedir = 'BrainsInJars'
@@ -108,7 +109,7 @@ class DeepPeg(Player):
         joblib.dump(self.peggingBrain, self.fullfilepegging)
         joblib.dump(self.throwingBrain, self.fullfilethrowing)
 
-    def throwCribCards(self, numCards, gameState):
+    def throwCribCards(self, numCards, gameState,criticThrow):
         cribCards = []
         self.cribThrow = []
         cardIndices = list(range(0, len(self.hand)))
@@ -145,52 +146,88 @@ class DeepPeg(Player):
         if (self.verbose):
             print("{} threw {} cards into the crib".format(self.getName(), numCards))
 
+        if not(criticThrow is None):
+            if not(areCardsEqual(self.cribThrow,criticThrow)):
+                self.explainThrow(numCards,gameState)
+            else:
+                print("The critic agreed with {}'s throw.".format(self.getName()))
+
         super().createPlayHand()
 
         return cribCards
 
-    def playCard(self, gameState):
+    def explainThrow(self,numCards,gameState):
+        print("DeepPeg ({}) has not implemented explainThrow".format(self.number))
+
+    def playCard(self, gameState, criticCard):
         if len(self.playhand) == 4:
             self.throwingState = self.getCurrentState(gameState)
         # Have to store state here, since it depends on the playhand which changes below
         self.prevState = self.getCurrentState(gameState)
 
-        actionIndex = self.chooseAction(gameState, True)
+        actionIndex = self.chooseAction(gameState, self.softmaxFlag, False)
 
         if actionIndex == 4:
             # Go
             cardPlayed = None
         else:
+            if not(criticCard is None) and not(criticCard.isIdentical(self.playhand[actionIndex])):
+                self.explainPlay(gameState)
             cardPlayed = self.playhand.pop(actionIndex)
             self.prevAction = actionIndex
 
         self.prevScore = self.getRelativeScore(gameState)
         return cardPlayed
 
-    def chooseAction(self, gameState, softmaxFlag):
+    def explainPlay(self, gameState):
+        print("\tDeepPeg ({}) is considering:".format(self.number))
+        
+        actionIndex = self.chooseAction(gameState, self.softmaxFlag, True)
+
+        if actionIndex == 4:
+            # Go
+            print("\tI have to say go!")            
+        else:
+            print("\tI chose to play {}".format(str(self.playhand[actionIndex])))
+        
+    def chooseAction(self, gameState, softmaxFlag, explainFlag):
         # Make sure hand is sorted
         self.playhand.sort()
-        # Figure out which actions are legal
+        # Figure out which actions are legal. A go is only legal if no other card can be played
         legal = [(gameState['count'] + card.value()) <= 31 for card in self.playhand]
+        while len(legal) < 4:
+            legal.append(False)
+        if any(legal):
+            legal.append(False)
+        else:
+            legal.append(True)
         legalHand = [card for (card, isLegal) in zip(self.playhand, legal) if isLegal]
         # legal hand is a new hand of only the cards that can legally be played
         # If no legal cards, only option is Go.
         if not legalHand:
             actionIndex = [4]
+            if explainFlag:
+                print("\tNo legal cards to play!")
         else:
             # Choosing a card from the legal cards
             state = self.getCurrentState(gameState)
-            # Predict using brain
-            probs = softmax(self.SAValues(state))
+            # Predict using brain and get softmax values of scores
+            saValues = softmax(self.SAValues(state))
             # Set probability of illegal choices to 0
-            probs = [p * int(isLegal) for (p, isLegal) in zip(probs, legal)]
-            # Re-normalize probabilities
-            probs = [p / sum(probs) for p in probs]
+            for i in range(0,len(saValues)):
+                saValues[i] = saValues[i] * int(legal[i])
+            # Renormalize scores
+            probs = saValues / np.sum(saValues)
             # Choose a card at random based on the probabilities
             if softmaxFlag:
                 actionIndex = random.choices(range(len(probs)), weights=probs)
+            # Or choose the best action
             else:
                 actionIndex = [np.argmax(probs)]
+                
+            if explainFlag:
+                for i in range(0,len(self.playhand)):
+                    print("\t{0}: {1}".format(str(self.playhand[i]),probs[i]))
 
         return actionIndex[0]
 
@@ -225,9 +262,9 @@ class DeepPeg(Player):
         if self.prevAction < 4:
             state = self.getCurrentState(gameState)
             reward = self.getRelativeScore(gameState) - self.prevScore
-            QValues = self.SAValues(self.prevState)[0]
+            QValues = self.SAValues(self.prevState)
             # Choose action for the current state
-            currentMaxAction = self.chooseAction(gameState, False)
+            currentMaxAction = self.chooseAction(gameState, False, False)
             update = self.alpha * (reward +
                                    self.gamma * self.SAValue(state, currentMaxAction) -
                                    self.SAValue(self.prevState, self.prevAction))
@@ -253,7 +290,7 @@ class DeepPeg(Player):
                 print('\tDelta: {}'.format(self.SAValues(self.prevState) - temp))
 
     def SAValue(self, state, actionIndex):
-        return self.SAValues(state)[0][actionIndex]
+        return self.SAValues(state)[actionIndex]
 
     def SAValues(self, state):
         actionValues = [[0, 0, 0, 0, 0]]
@@ -263,7 +300,7 @@ class DeepPeg(Player):
             # If the brain hasn't seen any training data yet, will return the NotFittedError.
             actionValues = [[0, 0, 0, 0, 0]]
         finally:
-            return actionValues
+            return actionValues[0]
 
     def getCurrentState(self, gameState):
         handstate = [card.rank.value for card in sorted(self.playhand)]
@@ -311,6 +348,7 @@ class DeepPeg(Player):
         return throwingFeatures
 
     def show(self):
+        print('{}:'.format(self.getName()))
         print('Hand:' + cardsString(sorted(self.playhand)))
         print('Crib throw:' + cardsString(self.cribThrow))
 

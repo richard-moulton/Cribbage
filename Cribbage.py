@@ -33,7 +33,7 @@ from Utilities import cardsString
 import random
 
 class Cribbage:
-    def __init__(self, playerArray, verboseFlag, rigged=False):
+    def __init__(self, playerArray, critic = None, verboseFlag = True, rigged=False):
         # Build a single standard deck
         self.rigged = rigged
         self.createDeck()
@@ -50,6 +50,7 @@ class Cribbage:
         self.dealer = random.randint(0, len(playerArray) - 1)
         # initialize the players
         self.players = playerArray
+        self.critic = critic
 
         # determine how much printing should occur
         self.verbose = verboseFlag
@@ -95,8 +96,10 @@ class Cribbage:
         self.deal()
         self.createCrib()
         self.cut()
-        # self.show()
+        if self.verbose:
+            self.show()
         self.play()
+        
         # self.scoreHands()
         if self.verbose:
             print("Score is " + self.scoreString())
@@ -127,7 +130,15 @@ class Cribbage:
     # player throws 2 cards into the crib.
     def createCrib(self):
         for player in self.players:
-            thrown = player.throwCribCards(2, self.gameState())
+            if not(self.critic is None) and player.number == 1:
+                criticThrows = self.critic.throwCribCards(2,self.gameState(),None)
+            else:
+                criticThrows = None
+            thrown = player.throwCribCards(2, self.gameState(),criticThrows)
+            if not(self.critic is None) and player.number== 1 and not(areCardsEqual(criticThrows,thrown)):
+                self.critic.explainThrow(2,self.gameState())
+            if self.verbose:
+                print("{} threw 2 cards into the crib.".format(player.getName()))
             for card in thrown:
                 self.crib.append(card)
 
@@ -177,6 +188,13 @@ class Cribbage:
         if self.verbose:
             print("{} dealt this hand.".format(self.players[self.dealer].getName()))
         
+        if not(self.critic is None):
+            self.critic.playhand = []
+            for i in range(0,4):
+                self.critic.playhand.append(self.players[0].playhand[i])
+            self.players[0].show()
+            self.critic.show()
+        
         self.playorder = []
         
         # Starting player is not the dealer
@@ -192,7 +210,13 @@ class Cribbage:
                 if self.verbose:
                     print("It is {}'s turn. Score is ".format(self.players[toPlay].getName()) + self.scoreString())
                 # Call on agent to choose a card
-                playedCard = self.players[toPlay].playCard(self.gameState())
+                if toPlay == 0 and not(self.critic is None):
+                    criticCard = self.critic.playCard(self.gameState(),None)
+                    if not(criticCard is None):
+                        self.critic.playhand.append(criticCard)
+                else:
+                    criticCard = None
+                playedCard = self.players[toPlay].playCard(self.gameState(),criticCard)
                 if playedCard is None:
                     if goCounter == 0:
                         goCounter = 1
@@ -202,6 +226,14 @@ class Cribbage:
                         if self.verbose:
                             print("{} scores 1 for the go.\n".format(self.players[toPlay].getName()))
                 else:
+                    if not(criticCard is None):
+                        if not(criticCard.isIdentical(playedCard)):
+                            self.critic.explainPlay(self.gameState())
+                        else:
+                            print("{} agrees with {}'s play.".format(self.critic.getName(),self.players[0].getName()))
+                        self.critic.removeCard(playedCard)
+                        self.players[0].show()
+                        self.critic.show()
                     count += playedCard.value()
                     self.inplay.append(playedCard)
                     self.playorder.append(playedCard)
@@ -254,9 +286,8 @@ class Cribbage:
     # Prints out the cards held by each player, the starter card and the cards
     # that have been thrown into the crib
     def show(self):
-        if self.verbose:
-            for player in self.players:
-                print(player)
-
-            print("Cut: " + str(self.starter))
-            print("Crib: " + cardsString(self.crib))
+        for player in self.players:
+            print(player)
+            
+        print("Cut: " + str(self.starter))
+        print("Crib: " + cardsString(self.crib))

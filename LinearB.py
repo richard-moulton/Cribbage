@@ -196,6 +196,14 @@ class LinearB(Player):
 
         return playedCard
 
+    # Explain why certain cards were thrown into the crib
+    def explainThrow(self,numCards,gameState):
+        print("LinearB ({}) has not implemented explainThrow".format(self.number))
+        
+    # Explain why a certain card was played during pegging
+    def explainPlay(self,numCards,gameState):
+        print("LinearB ({}) has not implemented explainThrow".format(self.number))
+
     # Determine which specific card should be played in the argument state
     def selectCardToPlay(self, gameState):
         cardToPlay = None

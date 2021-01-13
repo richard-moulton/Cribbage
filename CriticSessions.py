@@ -5,9 +5,8 @@
 # File : Arena.py
 # Authors : AJ Marasco and Richard Moulton
 #
-# Description : Records performance data for a player over a number of hands.
-#               Can be used to produce training curve data or to measure final
-#               performance levels. 
+# Description : Outputs performance data for a player over a number of hands 
+#               along with commentary from a critic player.
 #
 # Notes :
 #
@@ -27,19 +26,18 @@ from Deck import *
 import numpy as np
 from Utilities import *
 
-
-class Arena():
-    def __init__(self, players, repeatDeck,verboseFlag):
+class CriticSessions():
+    def __init__(self, players, critic, verboseFlag):
         # Initialize the players
         self.numPlayers = len(players)
-
-        # Initialize the Cribbage Dojo
-        self.repeatFlag = repeatDeck
-        self.cribbageDojo = Cribbage(players,None,True,True)
+        self.critic = critic
         self.verbose = verboseFlag
+        
+        # Initialize the Cribbage Dojo
+        self.cribbageDojo = Cribbage(players,self.critic,self.verbose,False)
 
-        print("Beginning the Arena between {0} and {1}.".format(self.cribbageDojo.players[0].getName(),self.cribbageDojo.players[1].getName()))
-
+        print("Beginning the Critic Sessions between {0} (with {2} critiquing) and {1}.".format(self.cribbageDojo.players[0].getName(),self.cribbageDojo.players[1].getName(),self.critic.getName()))
+        
     def playHands(self, numHands):
         peggingDiff = np.zeros(numHands)
         handsDiff = np.zeros(numHands)
@@ -50,12 +48,8 @@ class Arena():
                 print("Playing hand {} of {}.".format(handNumber+1,numHands))
                 
             # Initialize the hand
-            if self.repeatFlag:
-                self.deck = RiggedDeck(1)
-                self.deck.shuffle()
-            else:
-                self.deck = Deck(1)
-                self.deck.shuffle()
+            self.deck = Deck(1)
+            self.deck.shuffle()
             hands = []
             scores = []
             pegScores = []
@@ -76,9 +70,10 @@ class Arena():
                 
             starterCard = self.deck.cards.pop()
 
-            # Assign these hands to the players
+            # Assign these hands to the players and give a copy of the first hand to the critic
             for i in range(len(hands[0])):
                 self.cribbageDojo.players[0].hand.append(Card(hands[0][i].rank, hands[0][i].suit))
+                self.critic.hand.append(Card(hands[0][i].rank, hands[0][i].suit))
                 self.cribbageDojo.players[1].hand.append(Card(hands[1][i].rank, hands[1][i].suit))
 
             if self.verbose:
@@ -105,13 +100,14 @@ class Arena():
             totalPointsDiff[handNumber] = totalPointsDiff[handNumber] + scores[0] - scores[1]
 
             if self.verbose:
-                print("Hand Play 1 --> Peg: {0}-{1} ({2}), Hands: {3}-{4} ({5}), Total: {6}-{7} ({8})".format(pegScores[0],pegScores[1],peggingDiff[handNumber],handScores[0],handScores[1],handsDiff[handNumber],scores[0],scores[1],totalPointsDiff[handNumber]))
-
+                print("Hand Play 1 --> Peg: {0}-{1} ({2}), Hands: {3}-{4} ({5}), Total: {6}-{7} ({8})\n".format(pegScores[0],pegScores[1],peggingDiff[handNumber],handScores[0],handScores[1],handsDiff[handNumber],scores[0],scores[1],totalPointsDiff[handNumber]))
+                print("***********");
 
             # Assign the opposite hands to the players
             for i in range(len(hands[0])):
                 self.cribbageDojo.players[1].hand.append(Card(hands[0][i].rank, hands[0][i].suit))
                 self.cribbageDojo.players[0].hand.append(Card(hands[1][i].rank, hands[1][i].suit))
+                self.critic.hand.append(Card(hands[1][i].rank, hands[1][i].suit))
                 
             for i in range(self.numPlayers):
                 pegScores[i] = 0
@@ -142,7 +138,8 @@ class Arena():
             totalPointsDiff[handNumber] = totalPointsDiff[handNumber] + scores[0] - scores[1]
             
             if self.verbose:
-                print("Hand Play 2 --> Peg: {0}-{1} ({2}), Hands: {3}-{4} ({5}), Total: {6}-{7} ({8})".format(pegScores[0],pegScores[1],peggingDiff[handNumber],handScores[0],handScores[1],handsDiff[handNumber],scores[0],scores[1],totalPointsDiff[handNumber]))
-                print("Hand {0}: Pegging Diff {1}, Hands Diff {2}, Total Diff {3}".format(handNumber+1, peggingDiff[handNumber], handsDiff[handNumber], totalPointsDiff[handNumber]))
+                print("Hand Play 2 --> Peg: {0}-{1} ({2}), Hands: {3}-{4} ({5}), Total: {6}-{7} ({8})".format(pegScores[0],pegScores[1],pegScores[0] - pegScores[1],handScores[0],handScores[1],handScores[0] - handScores[1],scores[0],scores[1],scores[0] - scores[1]))
+                print("***********");
+                print("Hand {0} Cumulative Results: Pegging Diff {1}, Hands Diff {2}, Total Diff {3}".format(handNumber+1, peggingDiff[handNumber], handsDiff[handNumber], totalPointsDiff[handNumber]))
             
         return [peggingDiff,handsDiff,totalPointsDiff]

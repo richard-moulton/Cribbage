@@ -159,6 +159,14 @@ class Monty2(Player):
 
         return cardPlayed
 
+    # Explain why certain cards were thrown into the crib
+    def explainThrow(self,numCards,gameState):
+        print("Carlos Monteros ({}) has not implemented explainThrow".format(self.number))
+        
+    # Explain why a certain card was played during pegging
+    def explainPlay(self,numCards,gameState):
+        print("Carlos Monteros ({}) has not implemented explainThrow".format(self.number))
+
     def chooseAction(self, gameState):
         # Make sure hand is sorted
         self.playhand.sort()
