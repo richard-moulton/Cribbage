@@ -64,10 +64,10 @@ class Card:
     def uid(self):
         return 13 * (self.suit.value - 1) + self.rank.value
 
-    def rank(self):
+    def getRank(self):
         return self.rank
 
-    def suit(self):
+    def getSuit(self):
         return self.suit
 
     def value(self):

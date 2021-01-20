@@ -40,8 +40,8 @@ from Monty2 import Monty2
 import numpy as np
 
 # Variables
-trainFlag = False
-tournamentFlag = True
+trainFlag = True
+tournamentFlag = False
 criticFlag = False
 
 verboseFlag = True
@@ -96,7 +96,7 @@ if tournamentFlag:
 
 # Critic
 if criticFlag:
-        player1 = DeepPeg(1,False,False,False)
+        player1 = DeepPeg(1,False,True,False)
         player2 = Myrmidon(2,5,False)
         critic = Myrmidon(0,5,False)
         criticSession = CriticSessions([player1,player2],critic,verboseFlag)

@@ -70,7 +70,8 @@ class CriticSessions():
                 
             starterCard = self.deck.cards.pop()
 
-            # Assign these hands to the players and give a copy of the first hand to the critic
+            # Assign these hands to the players and give a copy of the first hand to the 
+            self.critic.hand.clear()
             for i in range(len(hands[0])):
                 self.cribbageDojo.players[0].hand.append(Card(hands[0][i].rank, hands[0][i].suit))
                 self.critic.hand.append(Card(hands[0][i].rank, hands[0][i].suit))
@@ -104,6 +105,7 @@ class CriticSessions():
                 print("***********");
 
             # Assign the opposite hands to the players
+            self.critic.hand.clear()
             for i in range(len(hands[0])):
                 self.cribbageDojo.players[1].hand.append(Card(hands[0][i].rank, hands[0][i].suit))
                 self.cribbageDojo.players[0].hand.append(Card(hands[1][i].rank, hands[1][i].suit))

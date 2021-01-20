@@ -45,6 +45,7 @@ class Myrmidon(Player):
         self.numSims = max(numSims,1)
         self.verbose = verboseFlag
         self.name = "Myrmidon"
+        self.cribThrow = []
 
     def reset(self, gameState=None):
         super().reset()
@@ -113,10 +114,50 @@ class Myrmidon(Player):
 
         super().createPlayHand()
 
+        self.cribThrow = cribCards
+
         return cribCards
 
     def explainThrow(self,numCards,gameState):
-        print("Myrmidon ({}) has not implemented explainThrow".format(self.number))
+        hand = []
+        for i in range(len(self.hand)):
+            hand.append(self.hand[i])
+        for i in range(numCards):
+            hand.append(self.cribThrow[i])
+            
+        print("Myrmidon ({}) is considering a hand of: {}".format(self.number,cardsString(hand)))
+        cardScores = np.zeros(len(hand))
+
+        # Score the cards that would be left in the player's hand
+        for combination in combinations(hand, len(hand) - numCards):
+            for i in range(0, self.numSims):
+                starterCard = self.randomStarter()
+                score = getScore(list(combination), starterCard, False)
+                for j in range(0, len(hand)):
+                    if hand[j] in combination:
+                        cardScores[j] += score
+
+        # Score the cards that would be thrown in the crib
+        for combination in combinations(self.hand, numCards):
+            for i in range(0, self.numSims):
+                starterCard = self.randomStarter()
+                score = getScore(list(combination), starterCard, False)
+                for j in range(0, len(hand)):
+                    if hand[j] in combination:
+                        if gameState['dealer'] == (self.number - 1):
+                            # We can worry less about keeping the card if it
+                            # will score points for us in the crib
+                            cardScores[j] -= score
+                            if hand[j].rank == 5:
+                                cardScores[j] += 2
+                        else:
+                            # We should keep cards that will score points for 
+                            # our opponents in the crib
+                            cardScores[j] += score
+        
+        for i in range(len(hand)):
+            print("{}: {}".format(str(hand[i]),cardScores[i]))
+        
 
     # Chooses a card to play during pegging by maximizing the immediate return
     # and the value of the afterstate according to some heuristic rules.

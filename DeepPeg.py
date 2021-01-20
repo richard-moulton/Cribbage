@@ -57,6 +57,7 @@ import os
 import joblib
 from itertools import combinations
 import matplotlib.pyplot as plt
+import json
 
 class DeepPeg(Player):
 
@@ -85,7 +86,7 @@ class DeepPeg(Player):
             self.peggingBrain = joblib.load(self.fullfilepegging)
             print("Pegging Brain loaded")
         else:
-            self.peggingBrain = sknn.MLPRegressor(hidden_layer_sizes=(50, 25, 15), activation='relu', solver='adam',
+            self.peggingBrain = sknn.MLPRegressor(hidden_layer_sizes=(50, 50, 50, 25, 25, 25, 15), activation='relu', solver='adam',
                                                   alpha=0.1,
                                                   batch_size=1, max_iter=200)
             print("New Pegging Brain created")
@@ -97,17 +98,33 @@ class DeepPeg(Player):
             self.throwingBrain = joblib.load(self.fullfilethrowing)
             print("Throwing Brain loaded")
         else:
-            self.throwingBrain = sknn.MLPRegressor(hidden_layer_sizes=(25, 10), activation='relu', solver='adam',
+            self.throwingBrain = sknn.MLPRegressor(hidden_layer_sizes=(25, 20, 15, 10, 10), activation='relu', solver='adam',
                                                    alpha=0.1,
                                                    batch_size=1, max_iter=200)
             print("New Throwing Brain created")
 
+        filename = 'cardCombinations.json'
+        self.fullfilecribcard = os.path.join(os.getcwd(),self.filedir, filename)
+        
+        if os.path.exists(self.fullfilecribcard):
+            with open(self.fullfilecribcard) as json_file:
+                self.cribCardCombinations = json.load(json_file)
+            print("Card combinations loaded")
+        else:
+            self.cribCardCombinations = dict()
+            self.cribCardCombinations["00"] = 0
+            print("New card combinations created")
+
+        self.opponentEstimate = np.empty(13)
+        self.numSims = 5
 
     def backup(self):
         if not os.path.isdir(self.filedir):
             os.mkdir(self.filedir)
         joblib.dump(self.peggingBrain, self.fullfilepegging)
         joblib.dump(self.throwingBrain, self.fullfilethrowing)
+        with open(self.fullfilecribcard,'w+') as outfile:
+            json.dump(self.cribCardCombinations, outfile)
 
     def throwCribCards(self, numCards, gameState,criticThrow):
         cribCards = []
@@ -119,6 +136,11 @@ class DeepPeg(Player):
         else:
             dealerFlag = 0
 
+        self.opponentEstimate = np.ones(13)
+        for i in range(len(self.hand)):
+           idx = self.hand[i].getRank().value - 1
+           self.opponentEstimate[idx] = self.opponentEstimate[idx] - 0.25
+
         for combination in combinations(cardIndices, len(self.hand) - numCards):
             handCards = []
             thrownCards = []
@@ -128,7 +150,33 @@ class DeepPeg(Player):
                 else:
                     thrownCards.append(Card(self.hand[i].rank, self.hand[i].suit))
 
-            q = self.throwValue(self.getThrowingFeatures(handCards, thrownCards, dealerFlag))
+            q = 0
+            possibleThrows = list(self.cribCardCombinations.keys())
+            possibleThrows.remove("00")
+            throwProbabilities = list(self.cribCardCombinations.values())
+            throwProbabilities.remove(self.cribCardCombinations["00"])
+            if not throwProbabilities:
+                possibleThrows = ["AA","22","33","44","55","66","77","88","99","TT","JJ","QQ","KK"]
+                throwProbabilities = [1,1,1,1,1,1,1,1,1,1,1,1,1]
+            throwProbabilities = throwProbabilities / np.sum(throwProbabilities)
+            for i in range(self.numSims):
+                oppThrow = np.random.choice(possibleThrows,p=throwProbabilities)
+                oppCards = []
+                for j in range(2):
+                    cardRank = oppThrow[j:j+1]
+                    if cardRank == "A":
+                        cardRank = 1
+                    elif cardRank == "T":
+                        cardRank = 10
+                    elif cardRank == "J":
+                        cardRank = 11
+                    elif cardRank == "Q":
+                        cardRank = 12
+                    elif cardRank == "K":
+                        cardRank = 13
+                    oppCards.append(Card(int(cardRank),np.random.randint(1,5)))
+                
+                q = q + self.throwValue(self.getThrowingFeatures(handCards, thrownCards, oppCards, dealerFlag))
 
             if q > maxValue:
                 maxValue = q
@@ -146,22 +194,119 @@ class DeepPeg(Player):
         if (self.verbose):
             print("{} threw {} cards into the crib".format(self.getName(), numCards))
 
+        super().createPlayHand()
+
         if not(criticThrow is None):
             if not(areCardsEqual(self.cribThrow,criticThrow)):
                 self.explainThrow(numCards,gameState)
             else:
                 print("The critic agreed with {}'s throw.".format(self.getName()))
 
-        super().createPlayHand()
+        # Note which cards have been thrown into the crib
+        cardKeys = list()
+        for i in range(2):
+            cardKeys.append(str(cribCards[i].getRank().value))
+            if cardKeys[i] == '1':
+                cardKeys[i] = 'A'
+            elif cardKeys[i] == '10':
+                cardKeys[i] = 'T'
+            elif cardKeys[i] == '11':
+                cardKeys[i] = 'J'
+            elif cardKeys[i] == '12':
+                cardKeys[i] = 'Q'
+            elif cardKeys[i] == '13':
+                cardKeys[i] = 'K'
+        
+        if cribCards[0].getRank().value <= cribCards[1].getRank().value:
+            cardKey = cardKeys[0]+cardKeys[1]
+        else:
+            cardKey = cardKeys[1]+cardKeys[0]
+            
+        if cardKey in self.cribCardCombinations:
+            self.cribCardCombinations[cardKey] = self.cribCardCombinations[cardKey] + 1
+        else:
+            self.cribCardCombinations[cardKey] = 1
+        self.cribCardCombinations["00"] = self.cribCardCombinations["00"] + 1
 
         return cribCards
 
     def explainThrow(self,numCards,gameState):
-        print("DeepPeg ({}) has not implemented explainThrow".format(self.number))
+        hand = []
+        for i in range(len(self.hand)):
+            hand.append(self.hand[i])
+        for i in range(numCards):
+            hand.append(self.cribThrow[i])
+        
+        print("DeepPeg ({}) is considering a hand of: {}".format(self.number,cardsString(hand)))
+        
+        cardIndices = list(range(0, len(hand)))
+        if gameState['dealer'] == self.number - 1:
+            dealerFlag = 1
+        else:
+            dealerFlag = 0
+        
+        for combination in combinations(cardIndices, len(hand) - numCards):
+            handCards = []
+            thrownCards = []
+            for i in range(0, len(cardIndices)):
+                if i in combination:
+                    handCards.append(Card(hand[i].rank, hand[i].suit))
+                else:
+                    thrownCards.append(Card(hand[i].rank, hand[i].suit))
+
+            q = 0
+            possibleThrows = list(self.cribCardCombinations.keys())
+            possibleThrows.remove("00")
+            throwProbabilities = list(self.cribCardCombinations.values())
+            throwProbabilities.remove(self.cribCardCombinations["00"])
+            if not throwProbabilities:
+                possibleThrows = ["AA","22","33","44","55","66","77","88","99","TT","JJ","QQ","KK"]
+                throwProbabilities = [1,1,1,1,1,1,1,1,1,1,1,1,1]
+            throwProbabilities = throwProbabilities / np.sum(throwProbabilities)
+            for i in range(self.numSims):
+                oppThrow = np.random.choice(possibleThrows,p=throwProbabilities)
+                oppCards = []
+                for j in range(2):
+                    cardRank = oppThrow[j:j+1]
+                    if cardRank == "A":
+                        cardRank = 1
+                    elif cardRank == "T":
+                        cardRank = 10
+                    elif cardRank == "J":
+                        cardRank = 11
+                    elif cardRank == "Q":
+                        cardRank = 12
+                    elif cardRank == "K":
+                        cardRank = 13
+                    oppCards.append(Card(int(cardRank),np.random.randint(1,5)))
+                
+                q = q + self.throwValue(self.getThrowingFeatures(handCards, thrownCards, oppCards, dealerFlag))
+            
+            print("\t{}: {}".format(cardsString(thrownCards),q))
+            
+        print("")
 
     def playCard(self, gameState, criticCard):
         if len(self.playhand) == 4:
             self.throwingState = self.getCurrentState(gameState)
+            if len(gameState["inplay"]) < 2:
+                starterRank = gameState["starter"].getRank().value - 1
+                self.opponentEstimate[starterRank] = self.opponentEstimate[starterRank] - 0.25
+                
+        # Update estimate of opponent hand
+        if len(gameState["inplay"]) > 0:
+            updateFlag = True
+            for i in range(len(self.hand)):
+                if self.hand[i].isIdentical(gameState["inplay"][-1]):
+                    updateFlag = False
+                    break
+            if updateFlag:
+                lastPlayedRank = gameState["inplay"][-1].getRank().value - 1
+                self.opponentEstimate[lastPlayedRank] = self.opponentEstimate[lastPlayedRank] - 0.25
+        
+        if self.verbose:
+            print("Opponent estimate: {}".format(self.opponentEstimate))
+        
         # Have to store state here, since it depends on the playhand which changes below
         self.prevState = self.getCurrentState(gameState)
 
@@ -240,7 +385,31 @@ class DeepPeg(Player):
             reward -= scores[2]
             dealerFlag = 0
 
-        state = self.getThrowingFeatures(self.hand, self.cribThrow, dealerFlag)
+        possibleThrows = list(self.cribCardCombinations.keys())
+        possibleThrows.remove("00")
+        throwProbabilities = list(self.cribCardCombinations.values())
+        throwProbabilities.remove(self.cribCardCombinations["00"])
+        if not throwProbabilities:
+            possibleThrows = ["AA","22","33","44","55","66","77","88","99","TT","JJ","QQ","KK"]
+            throwProbabilities = [1,1,1,1,1,1,1,1,1,1,1,1,1]
+        throwProbabilities = throwProbabilities / np.sum(throwProbabilities)
+        oppThrow = np.random.choice(possibleThrows,p=throwProbabilities)
+        oppCards = []
+        for j in range(2):
+            cardRank = oppThrow[j:j+1]
+            if cardRank == "A":
+                cardRank = 1
+            elif cardRank == "T":
+                cardRank = 10
+            elif cardRank == "J":
+                cardRank = 11
+            elif cardRank == "Q":
+                cardRank = 12
+            elif cardRank == "K":
+                cardRank = 13
+            oppCards.append(Card(int(cardRank),np.random.randint(1,5)))
+
+        state = self.getThrowingFeatures(self.hand, self.cribThrow, oppCards, dealerFlag)
         qValue = self.throwValue(state)
 
         update = self.alpha * (reward + np.max(self.SAValues(self.throwingState)) - qValue)
@@ -315,18 +484,23 @@ class DeepPeg(Player):
         state = handstate + playstate + cribstate + [gameState['starter'].value()]
         state = [val / 13 for val in state]
         state.append(gameState['count'] / 31)
+        
+        for i in range(len(self.opponentEstimate)):
+            state.append(self.opponentEstimate[i])
+        
         state.append(int(gameState['dealer'] == (self.number - 1)))
         return state
 
     def throwValue(self, state):
+        value = 0
         try:
             value = self.throwingBrain.predict([state])
         except skl.exceptions.NotFittedError:
-            value = 0
+            print("DeepPeg {}'s throwValue function had an skl.exceptions.NotFittedError".format(self.number))
         finally:
             return value
 
-    def getThrowingFeatures(self, handCards, thrownCards, dealerFlag):
+    def getThrowingFeatures(self, handCards, thrownCards, oppCards, dealerFlag):
         throwingFeatures = []
 
         handCards.sort()
@@ -342,6 +516,16 @@ class DeepPeg(Player):
             suit = [0, 0, 0, 0]
             suit[card.suit.value - 1] = 1
             throwingFeatures.extend(suit)
+
+        oppCards.sort()
+        for card in oppCards:
+            throwingFeatures.append(card.rank.value / 13)
+            suit = [0, 0, 0, 0]
+            suit[card.suit.value - 1] = 1
+            throwingFeatures.extend(suit)
+            
+        for i in range(len(self.opponentEstimate)):
+            throwingFeatures.append(self.opponentEstimate[i])
 
         throwingFeatures.append(dealerFlag)
 
@@ -359,14 +543,14 @@ class DeepPeg(Player):
 
 if __name__ == '__main__':
     # Initialize variables
-    player1 = DeepPeg(1,False,False)
+    player1 = DeepPeg(1,True,True,False)
     player2 = Myrmidon(2,5,False)
-    numHands = 50000
+    numHands = 500
     repeatFlag = False
-    windowSize = 250
+    windowSize = 20
         
     # Create and run arena
-    arena = Arena([player1, player2],repeatFlag)
+    arena = Arena([player1, player2],repeatFlag,True)
     results = arena.playHands(numHands)
     
     # Plot results from arena
