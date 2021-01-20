@@ -40,15 +40,15 @@ from Monty2 import Monty2
 import numpy as np
 
 # Variables
-trainFlag = True
+trainFlag = False
 tournamentFlag = False
-criticFlag = False
+criticFlag = True
 
 verboseFlag = True
 
 # Training
 if trainFlag:
-    learningAgents = [DeepPeg(1,True,True,False)]#[LinearB(1,0.5,0.9,False),NonLinearB(1,0.3,0.7,False),DeepPeg(1,True,False),Monty(1,False),Monty2(1,False)]
+    learningAgents = [DeepPeg(1,False,True,False)]#[LinearB(1,0.5,0.9,False),NonLinearB(1,0.3,0.7,False),DeepPeg(1,True,False),Monty(1,False),Monty2(1,False)]
     opponentAgents = [Myrmidon(2,5,False),DeepPeg(2,False,False,False)]
 
     for i in range(50):
@@ -73,6 +73,7 @@ if tournamentFlag:
                 player1 = opponentAgents[i]
                 player1.number = 1
                 player2 = opponentAgents[j]
+                player2.number = 2
                 arena = Arena([player1,player2],False,verboseFlag)
                 matchupResults = arena.playHands(50)
                 peggingResults[i][j] = np.average(matchupResults[0])
@@ -100,5 +101,5 @@ if criticFlag:
         player2 = Myrmidon(2,5,False)
         critic = Myrmidon(0,5,False)
         criticSession = CriticSessions([player1,player2],critic,verboseFlag)
-        criticSession.playHands(1)
+        criticSession.playHands(2)
     

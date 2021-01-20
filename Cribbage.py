@@ -192,8 +192,8 @@ class Cribbage:
             self.critic.playhand = []
             for i in range(0,4):
                 self.critic.playhand.append(self.players[0].playhand[i])
-            self.players[0].show()
-            self.critic.show()
+            #self.players[0].show()
+            #self.critic.show()
         
         self.playorder = []
         
@@ -232,8 +232,8 @@ class Cribbage:
                         else:
                             print("{} agrees with {}'s play.".format(self.critic.getName(),self.players[0].getName()))
                         self.critic.removeCard(playedCard)
-                        self.players[0].show()
-                        self.critic.show()
+                        #self.players[0].show()
+                        #self.critic.show()
                     count += playedCard.value()
                     self.inplay.append(playedCard)
                     self.playorder.append(playedCard)

@@ -125,9 +125,18 @@ class Myrmidon(Player):
         for i in range(numCards):
             hand.append(self.cribThrow[i])
             
-        print("Myrmidon ({}) is considering a hand of: {}".format(self.number,cardsString(hand)))
         cardScores = np.zeros(len(hand))
-
+        if gameState['dealer'] == self.number - 1:
+            dealerFlag = 1
+        else:
+            dealerFlag = 0    
+        
+        print("Myrmidon ({}) is considering a hand of: {}".format(self.number,cardsString(hand)),end="")        
+        if dealerFlag == 1:
+            print(". Own crib.")
+        else:
+            print(". Opponent's crib.")
+        
         # Score the cards that would be left in the player's hand
         for combination in combinations(hand, len(hand) - numCards):
             for i in range(0, self.numSims):
@@ -158,6 +167,15 @@ class Myrmidon(Player):
         for i in range(len(hand)):
             print("{}: {}".format(str(hand[i]),cardScores[i]))
         
+        # Pick the lowest scoring cards to throw
+        cribCards = []
+        for i in range(0, numCards):
+            lowIndex = min(range(len(cardScores)), key=cardScores.__getitem__)
+            cribCards.append(hand[lowIndex])
+            cardScores = np.delete(cardScores, lowIndex)
+            
+        print("I chose to throw: {}".format(cardsString(cribCards)))
+        print("")
 
     # Chooses a card to play during pegging by maximizing the immediate return
     # and the value of the afterstate according to some heuristic rules.

@@ -237,13 +237,19 @@ class DeepPeg(Player):
         for i in range(numCards):
             hand.append(self.cribThrow[i])
         
-        print("DeepPeg ({}) is considering a hand of: {}".format(self.number,cardsString(hand)))
-        
         cardIndices = list(range(0, len(hand)))
         if gameState['dealer'] == self.number - 1:
             dealerFlag = 1
         else:
             dealerFlag = 0
+        
+        print("DeepPeg ({}) is considering a hand of: {}".format(self.number,cardsString(hand)),end="")
+        if dealerFlag == 1:
+            print(". Own crib.")
+        else:
+            print(". Opponent's crib.")
+        
+        maxValue = -np.inf
         
         for combination in combinations(cardIndices, len(hand) - numCards):
             handCards = []
@@ -282,8 +288,16 @@ class DeepPeg(Player):
                 
                 q = q + self.throwValue(self.getThrowingFeatures(handCards, thrownCards, oppCards, dealerFlag))
             
-            print("\t{}: {}".format(cardsString(thrownCards),q))
+                if q > maxValue:
+                    maxValue = q
+                    cribCards = []
+                    cribCards.append(thrownCards[0])
+                    cribCards.append(thrownCards[1])
             
+            print("\t{}: {}".format(cardsString(thrownCards),q))
+        
+        
+        print("I chose to throw: {}".format(cardsString(cribCards)))
         print("")
 
     def playCard(self, gameState, criticCard):
