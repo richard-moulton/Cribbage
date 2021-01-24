@@ -48,19 +48,19 @@ class Player(ABC):
         print("Tried to remove the {} from {}'s playhand, but it wasn't there!".format(str(card),self.getName()))
 
     @abstractmethod
-    def throwCribCards(self, numCards, crib, criticThrow):
+    def throwCribCards(self, numCards, crib):
         pass
 
     @abstractmethod
-    def playCard(self, gameState, criticCard):
+    def playCard(self, gameState):
         pass
 
     @abstractmethod
-    def explainThrow(self, numCards, crib):
+    def explainThrow(self):
         pass
     
     @abstractmethod
-    def explainPlay(self, gameState):
+    def explainPlay(self):
         pass
 
     @abstractmethod

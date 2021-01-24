@@ -48,7 +48,7 @@ class PlayerRandom(Player):
         super().reset()
 
     # Randomly select two cards to throw into the crib
-    def throwCribCards(self, numCards, gameState, criticThrows):
+    def throwCribCards(self, numCards, gameState):
         cribCards = []
 
         for i in range(0, numCards):
@@ -62,7 +62,7 @@ class PlayerRandom(Player):
         return cribCards
 
     # Randomly select a card to play while making sure that it won't put the count over 31
-    def playCard(self, gameState,criticCard):
+    def playCard(self, gameState):
         cardIndices = list(range(0, len(self.playhand)))
         playedCard = None
         count = gameState['count']

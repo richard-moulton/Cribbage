@@ -41,8 +41,8 @@ import numpy as np
 
 # Variables
 trainFlag = False
-tournamentFlag = False
-criticFlag = True
+tournamentFlag = True
+criticFlag = False
 
 verboseFlag = True
 
@@ -51,7 +51,7 @@ if trainFlag:
     learningAgents = [DeepPeg(1,False,True,False)]#[LinearB(1,0.5,0.9,False),NonLinearB(1,0.3,0.7,False),DeepPeg(1,True,False),Monty(1,False),Monty2(1,False)]
     opponentAgents = [Myrmidon(2,5,False),DeepPeg(2,False,False,False)]
 
-    for i in range(50):
+    for i in range(100):
         for j in range(len(learningAgents)):
             for k in range(len(opponentAgents)):
                 player1 = learningAgents[j]
@@ -62,7 +62,7 @@ if trainFlag:
 
 # Tournament
 if tournamentFlag:
-    opponentAgents = [PlayerRandom(1,False),DeepPeg(1,True,False,False),DeepPeg(1,False,False,False),Myrmidon(2,1,False),Myrmidon(2,5,False),Myrmidon(2,10,False)]
+    opponentAgents = [PlayerRandom(1,False),DeepPeg(1,True,False,False),DeepPeg(1,False,False,False),Myrmidon(2,5,False)]
     numAgents = len(opponentAgents)
     peggingResults = np.zeros((numAgents,numAgents))
     handResults = np.zeros((numAgents,numAgents))
@@ -97,9 +97,9 @@ if tournamentFlag:
 
 # Critic
 if criticFlag:
-        player1 = DeepPeg(1,False,True,False)
+        player1 = DeepPeg(1,False,True,True)
         player2 = Myrmidon(2,5,False)
         critic = Myrmidon(0,5,False)
         criticSession = CriticSessions([player1,player2],critic,verboseFlag)
-        criticSession.playHands(2)
+        criticSession.playHands(10)
     

@@ -48,7 +48,7 @@ from Player import Player
 from Myrmidon import Myrmidon
 
 # Utility imports
-from Utilities import *
+from Utilities import cardsString,softmax
 import numpy as np
 import sklearn as skl
 from sklearn import neural_network as sknn
@@ -67,6 +67,7 @@ class DeepPeg(Player):
         # Note: epsilon unused since we use softmax decision making
         self.epsilon = 0.1
         self.gamma = 0.1
+        self.batchSize = 10
         self.name = 'DeepPeg'
 
         self.prevAction = 5
@@ -77,6 +78,8 @@ class DeepPeg(Player):
         self.throwingState = []
         self.softmaxFlag = softmaxFlag
         self.saveFlag = saveBrains
+        self.throwString = ""
+        self.playString = ""
 
         self.filedir = 'BrainsInJars'
         filename = 'QlearnV1.brain'
@@ -88,7 +91,7 @@ class DeepPeg(Player):
         else:
             self.peggingBrain = sknn.MLPRegressor(hidden_layer_sizes=(50, 50, 50, 25, 25, 25, 15), activation='relu', solver='adam',
                                                   alpha=0.1,
-                                                  batch_size=1, max_iter=200)
+                                                  batch_size=1, max_iter=500)
             print("New Pegging Brain created")
 
         filename = 'Qlearn_throwV1.brain'
@@ -100,7 +103,7 @@ class DeepPeg(Player):
         else:
             self.throwingBrain = sknn.MLPRegressor(hidden_layer_sizes=(25, 20, 15, 10, 10), activation='relu', solver='adam',
                                                    alpha=0.1,
-                                                   batch_size=1, max_iter=200)
+                                                   batch_size=1, max_iter=500)
             print("New Throwing Brain created")
 
         filename = 'cardCombinations.json'
@@ -117,6 +120,10 @@ class DeepPeg(Player):
 
         self.opponentEstimate = np.empty(13)
         self.numSims = 5
+        self.peggingStates = np.array([])
+        self.peggingResults = np.array([])
+        self.handStates = np.array([])
+        self.handResults = np.array([])
 
     def backup(self):
         if not os.path.isdir(self.filedir):
@@ -126,7 +133,7 @@ class DeepPeg(Player):
         with open(self.fullfilecribcard,'w+') as outfile:
             json.dump(self.cribCardCombinations, outfile)
 
-    def throwCribCards(self, numCards, gameState,criticThrow):
+    def throwCribCards(self, numCards, gameState):
         cribCards = []
         self.cribThrow = []
         cardIndices = list(range(0, len(self.hand)))
@@ -135,6 +142,12 @@ class DeepPeg(Player):
             dealerFlag = 1
         else:
             dealerFlag = 0
+
+        self.throwString = "DeepPeg ({}) is considering a hand of: {}".format(self.number,cardsString(self.hand))
+        if dealerFlag == 1:
+            self.throwString = "{}. Own crib.\n".format(self.throwString)
+        else:
+            self.throwString = "{}. Opponent's crib.\n".format(self.throwString)
 
         self.opponentEstimate = np.ones(13)
         for i in range(len(self.hand)):
@@ -178,12 +191,16 @@ class DeepPeg(Player):
                 
                 q = q + self.throwValue(self.getThrowingFeatures(handCards, thrownCards, oppCards, dealerFlag))
 
+            self.throwString = "{}\t{}: {}\n".format(self.throwString,cardsString(thrownCards),q)
+
             if q > maxValue:
                 maxValue = q
                 cribCards = []
                 cribCards.append(thrownCards.pop())
                 cribCards.append(thrownCards.pop())
-
+            
+        self.throwString = "{}I chose to throw: {}\n\n".format(self.throwString,cardsString(cribCards))
+    
         for i in range(0, len(cribCards)):
             for j in range(0, len(self.hand)):
                 if cribCards[i].isIdentical(self.hand[j]):
@@ -195,12 +212,6 @@ class DeepPeg(Player):
             print("{} threw {} cards into the crib".format(self.getName(), numCards))
 
         super().createPlayHand()
-
-        if not(criticThrow is None):
-            if not(areCardsEqual(self.cribThrow,criticThrow)):
-                self.explainThrow(numCards,gameState)
-            else:
-                print("The critic agreed with {}'s throw.".format(self.getName()))
 
         # Note which cards have been thrown into the crib
         cardKeys = list()
@@ -230,143 +241,77 @@ class DeepPeg(Player):
 
         return cribCards
 
-    def explainThrow(self,numCards,gameState):
-        hand = []
-        for i in range(len(self.hand)):
-            hand.append(self.hand[i])
-        for i in range(numCards):
-            hand.append(self.cribThrow[i])
-        
-        cardIndices = list(range(0, len(hand)))
-        if gameState['dealer'] == self.number - 1:
-            dealerFlag = 1
-        else:
-            dealerFlag = 0
-        
-        print("DeepPeg ({}) is considering a hand of: {}".format(self.number,cardsString(hand)),end="")
-        if dealerFlag == 1:
-            print(". Own crib.")
-        else:
-            print(". Opponent's crib.")
-        
-        maxValue = -np.inf
-        
-        for combination in combinations(cardIndices, len(hand) - numCards):
-            handCards = []
-            thrownCards = []
-            for i in range(0, len(cardIndices)):
-                if i in combination:
-                    handCards.append(Card(hand[i].rank, hand[i].suit))
-                else:
-                    thrownCards.append(Card(hand[i].rank, hand[i].suit))
+    def explainThrow(self):
+        print(self.throwString)
 
-            q = 0
-            possibleThrows = list(self.cribCardCombinations.keys())
-            possibleThrows.remove("00")
-            throwProbabilities = list(self.cribCardCombinations.values())
-            throwProbabilities.remove(self.cribCardCombinations["00"])
-            if not throwProbabilities:
-                possibleThrows = ["AA","22","33","44","55","66","77","88","99","TT","JJ","QQ","KK"]
-                throwProbabilities = [1,1,1,1,1,1,1,1,1,1,1,1,1]
-            throwProbabilities = throwProbabilities / np.sum(throwProbabilities)
-            for i in range(self.numSims):
-                oppThrow = np.random.choice(possibleThrows,p=throwProbabilities)
-                oppCards = []
-                for j in range(2):
-                    cardRank = oppThrow[j:j+1]
-                    if cardRank == "A":
-                        cardRank = 1
-                    elif cardRank == "T":
-                        cardRank = 10
-                    elif cardRank == "J":
-                        cardRank = 11
-                    elif cardRank == "Q":
-                        cardRank = 12
-                    elif cardRank == "K":
-                        cardRank = 13
-                    oppCards.append(Card(int(cardRank),np.random.randint(1,5)))
-                
-                q = q + self.throwValue(self.getThrowingFeatures(handCards, thrownCards, oppCards, dealerFlag))
-            
-                if q > maxValue:
-                    maxValue = q
-                    cribCards = []
-                    cribCards.append(thrownCards[0])
-                    cribCards.append(thrownCards[1])
-            
-            print("\t{}: {}".format(cardsString(thrownCards),q))
-        
-        
-        print("I chose to throw: {}".format(cardsString(cribCards)))
-        print("")
-
-    def playCard(self, gameState, criticCard):
+    def playCard(self, gameState):
         if len(self.playhand) == 4:
             self.throwingState = self.getCurrentState(gameState)
             if len(gameState["inplay"]) < 2:
                 starterRank = gameState["starter"].getRank().value - 1
                 self.opponentEstimate[starterRank] = self.opponentEstimate[starterRank] - 0.25
-                
-        # Update estimate of opponent hand
-        if len(gameState["inplay"]) > 0:
-            updateFlag = True
-            for i in range(len(self.hand)):
-                if self.hand[i].isIdentical(gameState["inplay"][-1]):
-                    updateFlag = False
-                    break
-            if updateFlag:
-                lastPlayedRank = gameState["inplay"][-1].getRank().value - 1
-                self.opponentEstimate[lastPlayedRank] = self.opponentEstimate[lastPlayedRank] - 0.25
         
-        if self.verbose:
-            print("Opponent estimate: {}".format(self.opponentEstimate))
-        
-        # Have to store state here, since it depends on the playhand which changes below
-        self.prevState = self.getCurrentState(gameState)
-
-        actionIndex = self.chooseAction(gameState, self.softmaxFlag, False)
-
-        if actionIndex == 4:
-            # Go
+        if len(self.playhand) == 0:
             cardPlayed = None
+            self.playString = "\tDeepPeg ({}) has no cards to play. Must say go!\n".format(self.number)  
         else:
-            if not(criticCard is None) and not(criticCard.isIdentical(self.playhand[actionIndex])):
-                self.explainPlay(gameState)
-            cardPlayed = self.playhand.pop(actionIndex)
-            self.prevAction = actionIndex
+            self.playString = "\tDeepPeg ({}) is considering:".format(self.number)   
+        
+            # Update estimate of opponent hand
+            if len(gameState["inplay"]) > 0:
+                updateFlag = True
+                for i in range(len(self.hand)):
+                    if self.hand[i].isIdentical(gameState["inplay"][-1]):
+                        updateFlag = False
+                        break
+                    if updateFlag:
+                        lastPlayedRank = gameState["inplay"][-1].getRank().value - 1
+                        self.opponentEstimate[lastPlayedRank] = self.opponentEstimate[lastPlayedRank] - 0.25
+        
+            if self.verbose:
+                print("Opponent estimate: {}".format(self.opponentEstimate))
+        
+            # Have to store state here, since it depends on the playhand which changes below
+            self.prevState = self.getCurrentState(gameState)
 
-        self.prevScore = self.getRelativeScore(gameState)
+            actionIndex = self.chooseAction(gameState, self.softmaxFlag)
+
+            if actionIndex == 4:
+                # Go
+                cardPlayed = None
+                self.playString = "{}\tI have to say go!\n".format(self.playString)
+            else:
+                self.playString = "{}\tI chose to play {}\n".format(self.playString,str(self.playhand[actionIndex]))
+                cardPlayed = self.playhand.pop(actionIndex)
+                self.prevAction = actionIndex
+
+            self.prevScore = self.getRelativeScore(gameState)
+        
         return cardPlayed
 
-    def explainPlay(self, gameState):
-        print("\tDeepPeg ({}) is considering:".format(self.number))
+    def explainPlay(self):
+        print(self.playString)
         
-        actionIndex = self.chooseAction(gameState, self.softmaxFlag, True)
-
-        if actionIndex == 4:
-            # Go
-            print("\tI have to say go!")            
-        else:
-            print("\tI chose to play {}".format(str(self.playhand[actionIndex])))
-        
-    def chooseAction(self, gameState, softmaxFlag, explainFlag):
+    def chooseAction(self, gameState, softmaxFlag):
         # Make sure hand is sorted
         self.playhand.sort()
         # Figure out which actions are legal. A go is only legal if no other card can be played
         legal = [(gameState['count'] + card.value()) <= 31 for card in self.playhand]
         while len(legal) < 4:
+            # You can't play cards that aren't in your hand
             legal.append(False)
         if any(legal):
+            # If you can play, you can't say go
             legal.append(False)
         else:
+            # If you can't play, you have to say go!
             legal.append(True)
         legalHand = [card for (card, isLegal) in zip(self.playhand, legal) if isLegal]
         # legal hand is a new hand of only the cards that can legally be played
         # If no legal cards, only option is Go.
         if not legalHand:
             actionIndex = [4]
-            if explainFlag:
-                print("\tNo legal cards to play!")
+            self.playString = "{}\tNo legal cards to play!\n".format(self.playString)
         else:
             # Choosing a card from the legal cards
             state = self.getCurrentState(gameState)
@@ -384,9 +329,14 @@ class DeepPeg(Player):
             else:
                 actionIndex = [np.argmax(probs)]
                 
-            if explainFlag:
-                for i in range(0,len(self.playhand)):
-                    print("\t{0}: {1}".format(str(self.playhand[i]),probs[i]))
+            for i in range(0,len(self.playhand)):
+                self.playString = "{0}\t{1}: {2}\n".format(self.playString,str(self.playhand[i]),probs[i])
+
+        if not(legal[actionIndex[0]]):
+            print("Whoops, trying to play an illegal card! We want to choose action index {}, but our playhand is of length {}!".format(actionIndex[0],len(self.playhand)))
+        
+        if actionIndex[0] == len(self.playhand):
+            print("Whoops, action index is outside of the playhand's length! We want to choose action index {}, but our playhand is of length {}!".format(actionIndex[0],len(self.playhand)))
 
         return actionIndex[0]
 
@@ -428,17 +378,24 @@ class DeepPeg(Player):
 
         update = self.alpha * (reward + np.max(self.SAValues(self.throwingState)) - qValue)
 
-        self.throwingBrain.partial_fit([state], np.ravel([qValue + update]))
-        
-        if self.verbose:
-            print(self.name + ": Learning from hand scores!")
-            print('\tState: {}'.format(state))
-            print('\tQ-value (pre): {}'.format(qValue))
-            print('\tReward: {}'.format(reward))
-            print('\tUpdate Value : {}'.format(update))
-            
-        if self.saveFlag:
-            self.backup()
+        if self.handResults.size == 0:
+            self.handStates = np.array([state])
+            self.handResults = np.ravel([qValue + update])
+        else:
+            self.handStates = np.append(self.handStates,[state],axis=0)     
+            self.handResults = np.append(self.handResults,np.ravel([qValue + update]),axis=0)
+            if self.handResults.size == self.batchSize:
+                self.throwingBrain = self.throwingBrain.fit(self.handStates,self.handResults)
+                self.handStates = np.array([])
+                self.handResults = np.array([])
+            if self.verbose:
+                print(self.name + ": Learning from hand scores!")
+                print('\tState: {}'.format(state))
+                print('\tQ-value (pre): {}'.format(qValue))
+                print('\tReward: {}'.format(reward))
+                print('\tUpdate Value : {}'.format(update))
+            if self.saveFlag:
+                self.backup()
 
     def learnFromPegging(self, gameState):
         # If previous action is -1, we haven't had a turn yet. Nothing to learn.
@@ -446,31 +403,47 @@ class DeepPeg(Player):
             state = self.getCurrentState(gameState)
             reward = self.getRelativeScore(gameState) - self.prevScore
             QValues = self.SAValues(self.prevState)
+            
+            if self.verbose:
+                print(self.name + ": Learning from pegging!")
+            
             # Choose action for the current state
-            currentMaxAction = self.chooseAction(gameState, False, False)
+            currentMaxAction = self.chooseAction(gameState, False)
             update = self.alpha * (reward +
                                    self.gamma * self.SAValue(state, currentMaxAction) -
                                    self.SAValue(self.prevState, self.prevAction))
-            QValues[self.prevAction] = QValues[self.prevAction] + update
 
             if self.verbose:
-                print(self.name + ": Learning from pegging!")
                 print('\tCurrent Maximum Value Action: {}'.format(currentMaxAction))
                 print('\tReward: {}'.format(reward))
-                # print('\tUpdate Value : {}'.format(update))
-                temp = self.SAValues(self.prevState)
-                print('\tQ Values for prev state before training: {}'.format(temp))
+                print('\tUpdate Value : {}'.format(update))
+                print('\tOld Q-values: {}'.format(QValues[self.prevAction]))
+            
+            QValues[self.prevAction] = QValues[self.prevAction] + update     
+            temp = self.SAValues(self.prevState)
+            
+            if self.verbose:
+                print('\tNew Q-values: {}'.format(QValues[self.prevAction]))
+                print('\tSA Values for prev state before training: {}'.format(temp))
                 print('\tTraining Values: {}'.format(QValues))
 
-            try:
-                self.peggingBrain.partial_fit([self.prevState], [QValues])
-            except ValueError:
-                print('Brainfreeze!')
-
-            if self.verbose:
-                print('\tQ Values for prev state after training: {}'.format(self.SAValues(self.prevState)))
-                print('\tAction index: {}'.format(self.prevAction))
-                print('\tDelta: {}'.format(self.SAValues(self.prevState) - temp))
+            if self.peggingResults.size == 0:
+                self.peggingStates = np.array([self.prevState])
+                self.peggingResults = np.array([QValues])
+            else:
+                self.peggingStates = np.append(self.peggingStates,[self.prevState],axis=0)     
+                self.peggingResults = np.append(self.peggingResults,[QValues],axis=0)
+                if self.peggingResults.size == self.batchSize:
+                     try:
+                         self.peggingBrain = self.peggingBrain.fit(self.peggingStates,self.peggingResults)
+                     except ValueError:
+                         print('Brainfreeze!')
+                     self.peggingStates = np.array([])
+                     self.peggingResults = np.array([])
+                if self.verbose:
+                    print('\tSA Values for prev state after training: {}'.format(self.SAValues(self.prevState)))
+                    print('\tAction index: {}'.format(self.prevAction))
+                    print('\tDelta: {}'.format(self.SAValues(self.prevState) - temp))
 
     def SAValue(self, state, actionIndex):
         return self.SAValues(state)[actionIndex]
@@ -478,10 +451,10 @@ class DeepPeg(Player):
     def SAValues(self, state):
         actionValues = [[0, 0, 0, 0, 0]]
         try:
-            actionValues = self.peggingBrain.predict([state])
+            actionValues = self.peggingBrain.predict(np.array([state]))
         except skl.exceptions.NotFittedError:
             # If the brain hasn't seen any training data yet, will return the NotFittedError.
-            actionValues = [[0, 0, 0, 0, 0]]
+            print("DeepPeg {}'s SAValues function had an skl.exceptions.NotFittedError".format(self.number))
         finally:
             return actionValues[0]
 
@@ -508,7 +481,7 @@ class DeepPeg(Player):
     def throwValue(self, state):
         value = 0
         try:
-            value = self.throwingBrain.predict([state])
+            value = self.throwingBrain.predict(np.array([state]))
         except skl.exceptions.NotFittedError:
             print("DeepPeg {}'s throwValue function had an skl.exceptions.NotFittedError".format(self.number))
         finally:

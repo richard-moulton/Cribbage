@@ -25,11 +25,11 @@
 ################################################################################
 
 # Cribbage imports
-from Deck import *
-from Scoring import *
+from Deck import Rank,Deck,RiggedDeck
+from Scoring import getScore,scoreCards
 
 # Utility imports
-from Utilities import cardsString
+from Utilities import cardsString,areCardsEqual
 import random
 
 class Cribbage:
@@ -130,13 +130,12 @@ class Cribbage:
     # player throws 2 cards into the crib.
     def createCrib(self):
         for player in self.players:
+            thrown = player.throwCribCards(2, self.gameState())
             if not(self.critic is None) and player.number == 1:
-                criticThrows = self.critic.throwCribCards(2,self.gameState(),None)
-            else:
-                criticThrows = None
-            thrown = player.throwCribCards(2, self.gameState(),criticThrows)
-            if not(self.critic is None) and player.number== 1 and not(areCardsEqual(criticThrows,thrown)):
-                self.critic.explainThrow(2,self.gameState())
+                criticThrows = self.critic.throwCribCards(2,self.gameState())
+                if not(areCardsEqual(criticThrows,thrown)):
+                    self.players[0].explainThrow()
+                    self.critic.explainThrow()
             if self.verbose:
                 print("{} threw 2 cards into the crib.".format(player.getName()))
             for card in thrown:
@@ -211,12 +210,12 @@ class Cribbage:
                     print("It is {}'s turn. Score is ".format(self.players[toPlay].getName()) + self.scoreString())
                 # Call on agent to choose a card
                 if toPlay == 0 and not(self.critic is None):
-                    criticCard = self.critic.playCard(self.gameState(),None)
+                    criticCard = self.critic.playCard(self.gameState())
                     if not(criticCard is None):
                         self.critic.playhand.append(criticCard)
                 else:
                     criticCard = None
-                playedCard = self.players[toPlay].playCard(self.gameState(),criticCard)
+                playedCard = self.players[toPlay].playCard(self.gameState())
                 if playedCard is None:
                     if goCounter == 0:
                         goCounter = 1
@@ -228,12 +227,11 @@ class Cribbage:
                 else:
                     if not(criticCard is None):
                         if not(criticCard.isIdentical(playedCard)):
-                            self.critic.explainPlay(self.gameState())
+                            self.players[0].explainPlay()
+                            self.critic.explainPlay()
                         else:
                             print("{} agrees with {}'s play.".format(self.critic.getName(),self.players[0].getName()))
                         self.critic.removeCard(playedCard)
-                        #self.players[0].show()
-                        #self.critic.show()
                     count += playedCard.value()
                     self.inplay.append(playedCard)
                     self.playorder.append(playedCard)
